@@ -10,3 +10,5 @@ steps:
         -w /work \
         grafana/k6:latest run test.js
     displayName: 'Ejecución prueba con Docker (k6)'
+  
+
