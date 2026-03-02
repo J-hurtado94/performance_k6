@@ -21,12 +21,14 @@ export default function () {
 }
 
 
-export function handleSummary(data) {
 
-    console.log('Preparing the end-of-test summary...');
+export function handleSummary(data) {
+  console.log('Preparing the end-of-test summary...');
   return {
-    
-    'summary.json': JSON.stringify(data)
-  
+    // 👉 esto lo verás en los logs del job
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    // 👉 y además guardamos el JSON
+    'summary.json': JSON.stringify(data),
   };
+
 }
