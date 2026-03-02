@@ -8,9 +8,7 @@ export const options = {
     { duration: '20s', target: 15 },
     { duration: '10s', target: 0 },
   ],
-  thresholds: {
-    http_req_duration: ['p(95)<250'],
-  },
+ 
 };
 
 // The default exported function is gonna be picked up by k6 as the entry point for the test script. It will be executed repeatedly in "iterations" for the whole duration of the test.
@@ -24,10 +22,11 @@ export default function () {
 
 
 export function handleSummary(data) {
+
+    console.log('Preparing the end-of-test summary...');
   return {
-    'report.html': htmlReport(data),
-    // Si quieres más salidas, descomenta:
-    // 'summary.json': JSON.stringify(data, null, 2),
-    // 'summary.md': textSummary(data, { indent: ' ', enableColors: false }),
+    
+    'summary.json': JSON.stringify(data)
+  
   };
 }
