@@ -1,13 +1,12 @@
-
 trigger: none
-
-# azure-pipelines.yml
 
 pool:
   vmImage: 'ubuntu-latest'
 
 steps:
-  - task: k6-load-test@0
-    inputs:
-      filename: 'test.js'
-    displayName: 'Ejecucion prueba'
+  - script: |
+      docker run --rm \
+        -v $(System.DefaultWorkingDirectory):/work \
+        -w /work \
+        grafana/k6:latest run test.js
+    displayName: 'Ejecución prueba con Docker (k6)'
