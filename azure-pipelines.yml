@@ -16,7 +16,7 @@ steps:
  #Publicar el summary.json como artefacto
   - task: PublishPipelineArtifact@1
     inputs:
-      targetPath: '$(System.DefaultWorkingDirectory)/summary.json'
-      artifact: 'k6-summary'
+      targetPath: '$(System.DefaultWorkingDirectory)/summary.html'
+      artifact: 'k6-report-html'
       publishLocation: 'pipeline'
-    displayName: 'Publicar summary.json'
+    displayName: 'Publicar reporte HTML'
