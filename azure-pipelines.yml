@@ -1,0 +1,12 @@
+trigger: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - script: |
+      docker run --rm \
+        -v $(System.DefaultWorkingDirectory):/work \
+        -w /work \
+        grafana/k6:latest run test.js
+    displayName: 'Ejecución prueba con Docker (k6)'
