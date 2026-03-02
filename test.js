@@ -25,10 +25,11 @@ export default function () {
 export function handleSummary(data) {
   console.log('Preparing the end-of-test summary...');
   return {
-    // 👉 esto lo verás en los logs del job
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
-    // 👉 y además guardamos el JSON
+    
+ stdout: textSummary(data, { indent: ' ', enableColors: true }),
     'summary.json': JSON.stringify(data),
+    'summary.html': htmlReport(data),    
+
   };
 
 }
