@@ -1,3 +1,4 @@
+# azure-pipelines.yml
 trigger: none
 
 pool:
@@ -5,25 +6,8 @@ pool:
 
 steps:
   - script: |
-      set -e
-      mkdir -p "$(Build.ArtifactStagingDirectory)/k6"
       docker run --rm \
-        -v "$(System.DefaultWorkingDirectory)":/work \
-        -v "$(Build.ArtifactStagingDirectory)/k6":/out \
+        -v $(System.DefaultWorkingDirectory):/work \
         -w /work \
         grafana/k6:latest run test.js
-    displayName: 'Ejecución prueba con Docker (k6)'
-
-  - task: PublishPipelineArtifact@1
-    inputs:
-      targetPath: '$(Build.ArtifactStagingDirectory)/k6/summary.html'
-      artifact: 'k6-report-html'
-      publishLocation: 'pipeline'
-    displayName: 'Publicar reporte HTML'
-
-  - task: PublishPipelineArtifact@1
-    inputs:
-      targetPath: '$(Build.ArtifactStagingDirectory)/k6/summary.json'
-      artifact: 'k6-summary-json'
-      publishLocation: 'pipeline'
-    displayName: 'Publicar summary.json'
+    displayName: 'Ejecutar k6 con Docker'
