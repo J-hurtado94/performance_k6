@@ -25,12 +25,12 @@ export default function () {
 
 export function handleSummary(data) {
   console.log('Preparing the end-of-test summary...');
-  return {
-    
- stdout: textSummary(data, { indent: ' ', enableColors: true }),
-    'summary.json': JSON.stringify(data),
-    'summary.html': htmlReport(data),    
 
+return {
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    '/out/summary.json': JSON.stringify(data),
+    '/out/summary.html': htmlReport(data),
   };
+
 
 }
