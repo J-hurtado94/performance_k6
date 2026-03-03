@@ -1,7 +1,6 @@
 import http from 'k6/http';
 import {check, sleep } from 'k6';
-import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.4/index.js';
-import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js';
+
 export const options = {
   // Define the number of iterations for the test
   stages: [
@@ -19,18 +18,4 @@ export default function () {
   check(res, { 'status was 200': (r) => r.status == 200 });
   // Sleep for 1 second to simulate real-world usage
   sleep(1);
-}
-
-
-
-export function handleSummary(data) {
-  console.log('Preparing the end-of-test summary...');
-
-return {
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
-    '/out/summary.json': JSON.stringify(data),
-    '/out/summary.html': htmlReport(data),
-  };
-
-
 }
