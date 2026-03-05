@@ -3,8 +3,41 @@ trigger: none
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  ZAP_IMAGE: 'ghcr.io/zaproxy/zaproxy:stable'
+  TARGET_URL: 'https://globalmvm.com/'    # <-- cámbiala
+  WORK_DIR: 'zap_wrk'                       # carpeta local a mapear a /zap/wrk
+  HTML_REPORT: 'testreport.html'
+  GEN_CONF: 'gen.conf'
+
 steps:
 - script: |
-    echo "Ejecutando ZAP Baseline..."
-    docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t https://globalmvm.com/
-  displayName: "Run ZAP Baseline"
+    set -e
+    echo "Preparando carpeta de trabajo…"
+    mkdir -p "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
+    # Permisos amplios por si el contenedor corre como usuario no-root
+    chmod 777 "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
+
+    echo "Haciendo pull de la imagen $(ZAP_IMAGE)…"
+    docker pull "$(ZAP_IMAGE)"
+
+    echo "Ejecutando ZAP Baseline contra $(TARGET_URL)…"
+    # Montamos la carpeta local en /zap/wrk (lectura/escritura) para que ZAP
+    # pueda generar zap.yaml, gen.conf y el reporte HTML sin errores.
+    # Añadimos --user 0:0 para evitar problemas de permisos en /zap/wrk.
+    docker run --rm \
+      --user 0:0 \
+      -v "$(System.DefaultWorkingDirectory)/$(WORK_DIR)":/zap/wrk/:rw \
+      "$(ZAP_IMAGE)" zap-baseline.py \
+        -t "$(TARGET_URL)" \
+        -g "$(GEN_CONF)" \
+        -r "$(HTML_REPORT)"
+  displayName: "Run ZAP Baseline "
+
+# Publicar los archivos generados como artefactos del pipeline
+- task: PublishBuildArtifacts@1
+  displayName: "Publicar artefactos ZAP"
+  inputs:
+    PathtoPublish: '$(System.DefaultWorkingDirectory)/$(WORK_DIR)'
+    ArtifactName: 'zap-baseline-output'
+    publishLocation: 'Container'
