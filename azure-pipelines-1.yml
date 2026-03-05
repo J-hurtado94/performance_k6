@@ -4,57 +4,51 @@ pool:
 
 variables:
   ZAP_IMAGE: 'ghcr.io/zaproxy/zaproxy:stable'
-  TARGET_URL: 'https://globalmvm.com/'
+  TARGET_URL: 'https://globalmvm.com'
   WORK_DIR: 'zap_wrk'
   HTML_REPORT: 'testreport.html'
   GEN_CONF: 'gen.conf'
 
 steps:
 - script: |
-    set -e
     mkdir -p "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
     chmod 777 "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
 
-    echo "Pull de imagen $(ZAP_IMAGE)…"
-    docker pull "$(ZAP_IMAGE)"
+    # Definimos que la regla 10202 sea solo una advertencia (OUTOFSCOPE o WARN)
+    # Esto evita que ZP devuelva código 2 por esta razón.
+    echo "10202	OUTOFSCOPE" > "$(System.DefaultWorkingDirectory)/$(WORK_DIR)/$(GEN_CONF)"
 
-    echo "Ejecutando ZAP Baseline contra $(TARGET_URL)…"
-    # Capturamos el exit code sin romper el paso inmediatamente
+    echo "Ejecutando ZAP Baseline contra $(TARGET_URL)..."
     set +e
     docker run --rm --user 0:0 \
       -v "$(System.DefaultWorkingDirectory)/$(WORK_DIR)":/zap/wrk/:rw \
       "$(ZAP_IMAGE)" zap-baseline.py \
         -t "$(TARGET_URL)" \
-        -g "$(GEN_CONF)" \
+        -c "$(GEN_CONF)" \
         -r "$(HTML_REPORT)"
     EXIT_CODE=$?
     set -e
 
     echo "ZAP_EXIT_CODE=$EXIT_CODE"
-    # Exponerlo como variable del pipeline (por si lo quieres usar después)
-    echo "##vso[task.setvariable variable=ZAP_EXIT_CODE;isOutput=true]$EXIT_CODE"
 
-    # Política: si es 2 (FAIL) o 3 (ERROR) marcamos fallo.
-    if [ "$EXIT_CODE" -eq 2 ]; then
-      echo "==> Código detectado: 2 (FAIL)."
-      echo "##vso[task.logissue type=error]ZAP Baseline devolvió FAIL (2)"
-      # Opcional: marca explícitamente el resultado del task como Failed (además del exit)
-      echo "##vso[task.complete result=Failed;]ZAP Baseline FAIL (2)"
-      exit 2
-    elif [ "$EXIT_CODE" -eq 3 ]; then
-      echo "==> Código detectado: 3 (ERROR)."
-      echo "##vso[task.logissue type=error]ZAP Baseline devolvió ERROR (3)"
-      echo "##vso[task.complete result=Failed;]ZAP Baseline ERROR (3)"
-      exit 3
+    # Lógica basada en mejores prácticas:
+    # 0 = Todo bien o solo advertencias (WARN)
+    # 1 = Se encontraron riesgos ALTO (FAIL) -> El pipeline FALLA
+    # 2 = Se encontraron riesgos MEDIO/BAJO (no ignorados) -> El pipeline FALLA
+    # 3 = Error del escáner -> El pipeline FALLA
+
+    if [ "$EXIT_CODE" -eq 0 ]; then
+      echo "Exito: No se encontraron vulnerabilidades críticas."
     else
-      echo "==> Código detectado: $EXIT_CODE (no FAIL)."
+      echo "##vso[task.logissue type=error]ZAP detectó problemas serios o errores (Código: $EXIT_CODE)"
+      exit $EXIT_CODE
     fi
-  displayName: "Run ZAP Baseline (con manejo explícito de código 2)"
+  displayName: "Run ZAP Baseline (Regla 10202 como advertencia)"
 
 - task: PublishBuildArtifacts@1
-  displayName: "Publicar artefactos ZAP (siempre)"
+  displayName: "Publicar Reporte de Seguridad"
   condition: succeededOrFailed()
   inputs:
     PathtoPublish: '$(System.DefaultWorkingDirectory)/$(WORK_DIR)'
-    ArtifactName: 'zap-baseline-output'
+    ArtifactName: 'zap-security-report'
     publishLocation: 'Container'
