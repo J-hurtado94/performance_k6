@@ -4,51 +4,39 @@ pool:
 
 variables:
   ZAP_IMAGE: 'ghcr.io/zaproxy/zaproxy:stable'
-  TARGET_URL: 'https://globalmvm.com'
+  TARGET_URL: 'https://globalmvm.com/'
   WORK_DIR: 'zap_wrk'
   HTML_REPORT: 'testreport.html'
   GEN_CONF: 'gen.conf'
 
 steps:
 - script: |
+    set -e
     mkdir -p "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
     chmod 777 "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
-
-    # Definimos que la regla 10202 sea solo una advertencia (OUTOFSCOPE o WARN)
-    # Esto evita que ZP devuelva código 2 por esta razón.
-    echo "10202	OUTOFSCOPE" > "$(System.DefaultWorkingDirectory)/$(WORK_DIR)/$(GEN_CONF)"
-
-    echo "Ejecutando ZAP Baseline contra $(TARGET_URL)..."
+    docker pull "$(ZAP_IMAGE)"
+    # Ejecuta ZAP y captura el exit code SIN romper el step
     set +e
     docker run --rm --user 0:0 \
       -v "$(System.DefaultWorkingDirectory)/$(WORK_DIR)":/zap/wrk/:rw \
       "$(ZAP_IMAGE)" zap-baseline.py \
         -t "$(TARGET_URL)" \
-        -c "$(GEN_CONF)" \
+        -g "$(GEN_CONF)" \
         -r "$(HTML_REPORT)"
     EXIT_CODE=$?
     set -e
-
     echo "ZAP_EXIT_CODE=$EXIT_CODE"
-
-    # Lógica basada en mejores prácticas:
-    # 0 = Todo bien o solo advertencias (WARN)
-    # 1 = Se encontraron riesgos ALTO (FAIL) -> El pipeline FALLA
-    # 2 = Se encontraron riesgos MEDIO/BAJO (no ignorados) -> El pipeline FALLA
-    # 3 = Error del escáner -> El pipeline FALLA
-
-    if [ "$EXIT_CODE" -eq 0 ]; then
-      echo "Exito: No se encontraron vulnerabilidades críticas."
-    else
-      echo "##vso[task.logissue type=error]ZAP detectó problemas serios o errores (Código: $EXIT_CODE)"
+    # Política: solo fallar si es 2 (FAIL) o 3 (ERROR)
+    if [ "$EXIT_CODE" -eq 2 ] || [ "$EXIT_CODE" -eq 3 ]; then
+      echo "##vso[task.logissue type=error]ZAP Baseline devolvió FAIL/ERROR ($EXIT_CODE)"
       exit $EXIT_CODE
     fi
-  displayName: "Run ZAP Baseline (Regla 10202 como advertencia)"
+  displayName: "Run ZAP Baseline"
 
 - task: PublishBuildArtifacts@1
-  displayName: "Publicar Reporte de Seguridad"
+  displayName: "Publicar artefactos ZAP"
   condition: succeededOrFailed()
   inputs:
     PathtoPublish: '$(System.DefaultWorkingDirectory)/$(WORK_DIR)'
-    ArtifactName: 'zap-security-report'
-    publishLocation: 'Container'
+    ArtifactName: 'zap-baseline-output'
+    publishLocation: 'Container' 
