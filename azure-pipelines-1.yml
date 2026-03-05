@@ -1,0 +1,48 @@
+trigger: none   # cámbialo si quieres disparadores automáticos
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  ZAP_IMAGE: 'ghcr.io/zaproxy/zaproxy:stable'
+  TARGET_URL: 'https://globalmvm.com/'   # <-- cámbiala si hace falta
+
+stages:
+- stage: ZAP_Baseline
+  displayName: ZAP Baseline (Solo consola, sin API key)
+  jobs:
+  - job: Run_ZAP_Baseline
+    displayName: Ejecutar ZAP Baseline
+    steps:
+    - script: |
+        set -e
+        echo "Pull de imagen $(ZAP_IMAGE)…"
+        docker pull $(ZAP_IMAGE)
+
+        echo "Ejecutando ZAP Baseline contra $(TARGET_URL)…"
+        # SIN reportes (-r/-J/-x): toda la salida va a la consola.
+        # -z "-config api.disablekey=true" -> desactiva la API key de ZAP explícitamente.
+        set +e
+        docker run --rm \
+          $(ZAP_IMAGE) zap-baseline.py \
+            -t $(TARGET_URL) \
+            -m 5 \
+            -d \
+            -z "-config api.disablekey=true"
+        EXIT_CODE=$?
+        set -e
+
+        echo "ZAP_EXIT_CODE=$EXIT_CODE" | tee zap_exit_code.txt
+      displayName: 'Run zap-baseline.py (solo consola, sin API key)'
+
+    - script: |
+        EXIT=$(cut -d'=' -f2 zap_exit_code.txt)
+        echo "Código de salida de ZAP: $EXIT"
+        # Convención zap-baseline:
+        # 0 = Pass, 1 = Warn, 2 = Fail, 3 = Error
+        # Política: no fallar por Warn (1); fallar por Fail (2) o Error (3).
+        if [ "$EXIT" -eq 2 ] || [ "$EXIT" -eq 3 ]; then
+          echo "##vso[task.logissue type=error]ZAP Baseline devolvió FAIL/ERROR ($EXIT)"
+          exit $EXIT
+        fi
+      displayName: 'Evaluar resultado'
