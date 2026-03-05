@@ -14,8 +14,12 @@ steps:
     set -e
     mkdir -p "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
     chmod 777 "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
+
+    echo "Pull de imagen $(ZAP_IMAGE)…"
     docker pull "$(ZAP_IMAGE)"
-    # Ejecuta ZAP y captura el exit code SIN romper el step
+
+    echo "Ejecutando ZAP Baseline contra $(TARGET_URL)…"
+    # Capturamos el exit code sin romper el paso inmediatamente
     set +e
     docker run --rm --user 0:0 \
       -v "$(System.DefaultWorkingDirectory)/$(WORK_DIR)":/zap/wrk/:rw \
@@ -25,16 +29,30 @@ steps:
         -r "$(HTML_REPORT)"
     EXIT_CODE=$?
     set -e
+
     echo "ZAP_EXIT_CODE=$EXIT_CODE"
-    # Política: solo fallar si es 2 (FAIL) o 3 (ERROR)
-    if [ "$EXIT_CODE" -eq 2 ] || [ "$EXIT_CODE" -eq 3 ]; then
-      echo "##vso[task.logissue type=error]ZAP Baseline devolvió FAIL/ERROR ($EXIT_CODE)"
-      exit $EXIT_CODE
+    # Exponerlo como variable del pipeline (por si lo quieres usar después)
+    echo "##vso[task.setvariable variable=ZAP_EXIT_CODE;isOutput=true]$EXIT_CODE"
+
+    # Política: si es 2 (FAIL) o 3 (ERROR) marcamos fallo.
+    if [ "$EXIT_CODE" -eq 2 ]; then
+      echo "==> Código detectado: 2 (FAIL)."
+      echo "##vso[task.logissue type=error]ZAP Baseline devolvió FAIL (2)"
+      # Opcional: marca explícitamente el resultado del task como Failed (además del exit)
+      echo "##vso[task.complete result=Failed;]ZAP Baseline FAIL (2)"
+      exit 2
+    elif [ "$EXIT_CODE" -eq 3 ]; then
+      echo "==> Código detectado: 3 (ERROR)."
+      echo "##vso[task.logissue type=error]ZAP Baseline devolvió ERROR (3)"
+      echo "##vso[task.complete result=Failed;]ZAP Baseline ERROR (3)"
+      exit 3
+    else
+      echo "==> Código detectado: $EXIT_CODE (no FAIL)."
     fi
-  displayName: "Run ZAP Baseline"
+  displayName: "Run ZAP Baseline (con manejo explícito de código 2)"
 
 - task: PublishBuildArtifacts@1
-  displayName: "Publicar artefactos ZAP"
+  displayName: "Publicar artefactos ZAP (siempre)"
   condition: succeededOrFailed()
   inputs:
     PathtoPublish: '$(System.DefaultWorkingDirectory)/$(WORK_DIR)'
