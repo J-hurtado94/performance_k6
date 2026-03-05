@@ -1,42 +1,41 @@
 trigger: none
-
 pool:
   vmImage: 'ubuntu-latest'
 
 variables:
   ZAP_IMAGE: 'ghcr.io/zaproxy/zaproxy:stable'
-  TARGET_URL: 'https://globalmvm.com/'    # <-- cámbiala
-  WORK_DIR: 'zap_wrk'                       # carpeta local a mapear a /zap/wrk
+  TARGET_URL: 'https://globalmvm.com/'
+  WORK_DIR: 'zap_wrk'
   HTML_REPORT: 'testreport.html'
   GEN_CONF: 'gen.conf'
 
 steps:
 - script: |
     set -e
-    echo "Preparando carpeta de trabajo…"
     mkdir -p "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
-    # Permisos amplios por si el contenedor corre como usuario no-root
     chmod 777 "$(System.DefaultWorkingDirectory)/$(WORK_DIR)"
-
-    echo "Haciendo pull de la imagen $(ZAP_IMAGE)…"
     docker pull "$(ZAP_IMAGE)"
-
-    echo "Ejecutando ZAP Baseline contra $(TARGET_URL)…"
-    # Montamos la carpeta local en /zap/wrk (lectura/escritura) para que ZAP
-    # pueda generar zap.yaml, gen.conf y el reporte HTML sin errores.
-    # Añadimos --user 0:0 para evitar problemas de permisos en /zap/wrk.
-    docker run --rm \
-      --user 0:0 \
+    # Ejecuta ZAP y captura el exit code SIN romper el step
+    set +e
+    docker run --rm --user 0:0 \
       -v "$(System.DefaultWorkingDirectory)/$(WORK_DIR)":/zap/wrk/:rw \
       "$(ZAP_IMAGE)" zap-baseline.py \
         -t "$(TARGET_URL)" \
         -g "$(GEN_CONF)" \
         -r "$(HTML_REPORT)"
-  displayName: "Run ZAP Baseline "
+    EXIT_CODE=$?
+    set -e
+    echo "ZAP_EXIT_CODE=$EXIT_CODE"
+    # Política: solo fallar si es 2 (FAIL) o 3 (ERROR)
+    if [ "$EXIT_CODE" -eq 2 ] || [ "$EXIT_CODE" -eq 3 ]; then
+      echo "##vso[task.logissue type=error]ZAP Baseline devolvió FAIL/ERROR ($EXIT_CODE)"
+      exit $EXIT_CODE
+    fi
+  displayName: "Run ZAP Baseline"
 
-# Publicar los archivos generados como artefactos del pipeline
 - task: PublishBuildArtifacts@1
   displayName: "Publicar artefactos ZAP"
+  condition: succeededOrFailed()
   inputs:
     PathtoPublish: '$(System.DefaultWorkingDirectory)/$(WORK_DIR)'
     ArtifactName: 'zap-baseline-output'
