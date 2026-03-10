@@ -1,0 +1,88 @@
+# services:
+#   influxdb:
+#     image: influxdb:1.8
+#     container_name: influxdb
+#     restart: always
+#     ports:
+#       - "8086:8086"
+#     environment:
+#       INFLUXDB_DB: k6
+#     volumes:
+#       - influxdb-data:/var/lib/influxdb
+
+#   grafana:
+#     image: grafana/grafana:8.5.21
+#     container_name: grafana
+#     restart: always
+#     ports:
+#       - "3000:3000"
+#     volumes:
+#       - grafana-data:/var/lib/grafana
+#     depends_on:
+#       - influxdb
+
+# volumes:
+#   influxdb-data:
+#   grafana-data:
+
+
+
+
+networks:
+  monitoring: {}
+
+volumes:
+  influxdb-data:
+  grafana-data:
+
+services:
+  influxdb:
+    image: influxdb:1.8
+    container_name: influxdb
+    restart: always
+    networks: [monitoring]
+    ports:
+      - "8086:8086"              # opcional, para acceder desde tu PC
+    environment:
+      INFLUXDB_DB: k6
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8086/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana:8.5.21
+    container_name: grafana
+    restart: always
+    networks: [monitoring]
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    ports:
+      - "3000:3000"              # http://localhost:3000
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_BASIC_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  # Contenedor EFÍMERO para ejecutar pruebas
+  k6:
+    image: grafana/k6:latest
+    container_name: k6
+    networks: [monitoring]
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    environment:
+      # k6 verá a InfluxDB por su nombre de servicio DNS interno: "influxdb"
+      K6_OUT: "influxdb=http://influxdb:8086/k6"
+    volumes:
+      - ./scripts:/scripts:ro
+    # No lo dejamos en "up" permanente; lo ejecutas on-demand (ver comandos abajo)
+    entrypoint: ["k6"]
+
